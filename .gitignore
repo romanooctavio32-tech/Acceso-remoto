@@ -8,3 +8,7 @@ dist/
 *.spec
 __pycache__/
 *.pyc
+
+# Firma de código: nunca subir la clave privada
+*.pfx
+secretos_github.txt

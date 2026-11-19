@@ -13,6 +13,8 @@ permissions:
 jobs:
   compilar:
     runs-on: windows-latest
+    env:
+      FIRMA_DISPONIBLE: ${{ secrets.FIRMA_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +36,27 @@ jobs:
       - name: Compilar cliente
         run: pyinstaller --onefile --windowed --name ClienteRemoto cliente.py
 
+      - name: Firmar ejecutables
+        if: env.FIRMA_DISPONIBLE == 'true'
+        shell: pwsh
+        env:
+          FIRMA_PFX_BASE64: ${{ secrets.FIRMA_PFX_BASE64 }}
+          FIRMA_PFX_PASSWORD: ${{ secrets.FIRMA_PFX_PASSWORD }}
+        run: |
+          .\firma\firmar.ps1 -Archivos dist\ServidorRemoto.exe, dist\ClienteRemoto.exe
+          Copy-Item firma\instalar_certificado.ps1, firma\instalar_certificado.bat dist\
+          # Verificación: confiar en el certificado solo en esta máquina temporal
+          Import-Certificate -FilePath dist\AccesoRemoto-Firma.cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          foreach ($f in "dist\ServidorRemoto.exe", "dist\ClienteRemoto.exe") {
+            $s = Get-AuthenticodeSignature $f
+            Write-Host "$f -> $($s.Status) ($($s.SignerCertificate.Subject))"
+            if ($s.Status -ne "Valid") { throw "Firma inválida en $f" }
+          }
+
+      - name: Aviso sin firma
+        if: env.FIRMA_DISPONIBLE != 'true'
+        run: echo "::warning::Ejecutables SIN firmar. Ejecutá firma\crear_certificado.bat y cargá los secretos FIRMA_PFX_BASE64 y FIRMA_PFX_PASSWORD."
+
       - name: Verificar que el servidor arranca
         shell: pwsh
         run: |
@@ -45,11 +68,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AccesoRemoto-Windows
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.cer
+            dist/instalar_certificado.*
           retention-days: 30
 
       - name: Adjuntar ejecutables a la versión publicada
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/*.cer
+            dist/instalar_certificado.*
