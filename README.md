@@ -80,7 +80,16 @@ No expongas el puerto directo a Internet. Conectate por VPN (WireGuard, Tailscal
 - **Alt+F4 y Alt+Tab** los procesa primero tu Windows local, así que actúan sobre el cliente y no sobre el remoto.
 - El cursor remoto no se dibuja en la imagen; ves tu propio cursor encima.
 
-## Crear ejecutables (opcional)
+## Descargar los ejecutables
+
+Cada cambio en `main` se compila solo en GitHub Actions:
+
+- **Última compilación**: pestaña *Actions* → la ejecución más reciente → *Artifacts* → `AccesoRemoto-Windows` (se guarda 30 días).
+- **Versión permanente**: *Releases* → *Draft a new release* → crear un tag (por ejemplo `v1.0`) → *Publish*. A los ~2 minutos la versión tiene adjuntos `ServidorRemoto.exe` y `ClienteRemoto.exe`.
+
+Windows Defender o SmartScreen pueden avisar al abrirlos porque no están firmados. Elegí *Más información → Ejecutar de todas formas*.
+
+## Compilar a mano (opcional)
 
 ```bat
 pip install pyinstaller

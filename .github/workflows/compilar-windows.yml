@@ -3,7 +3,8 @@ name: Compilar ejecutables Windows
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -47,8 +48,8 @@ jobs:
           path: dist/*.exe
           retention-days: 30
 
-      - name: Publicar release (solo al crear un tag v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Adjuntar ejecutables a la versión publicada
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.exe
