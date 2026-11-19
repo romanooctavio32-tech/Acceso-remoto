@@ -1,0 +1,10 @@
+# Datos locales del servidor: contraseña (hash), certificado y log
+config_servidor.json
+*.pem
+*.log
+# PyInstaller / Python
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc

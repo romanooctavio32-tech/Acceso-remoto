@@ -1,0 +1,54 @@
+name: Compilar ejecutables Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compilar:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Compilar servidor
+        run: >
+          pyinstaller --onefile --name ServidorRemoto
+          --hidden-import pynput.keyboard._win32
+          --hidden-import pynput.mouse._win32
+          servidor.py
+
+      - name: Compilar cliente
+        run: pyinstaller --onefile --windowed --name ClienteRemoto cliente.py
+
+      - name: Verificar que el servidor arranca
+        shell: pwsh
+        run: |
+          & .\dist\ServidorRemoto.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "ServidorRemoto.exe no arranca" }
+          if (-not (Test-Path .\dist\ClienteRemoto.exe)) { throw "Falta ClienteRemoto.exe" }
+
+      - name: Subir ejecutables
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccesoRemoto-Windows
+          path: dist/*.exe
+          retention-days: 30
+
+      - name: Publicar release (solo al crear un tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
