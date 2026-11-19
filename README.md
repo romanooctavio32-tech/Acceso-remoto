@@ -87,7 +87,29 @@ Cada cambio en `main` se compila solo en GitHub Actions:
 - **Última compilación**: pestaña *Actions* → la ejecución más reciente → *Artifacts* → `AccesoRemoto-Windows` (se guarda 30 días).
 - **Versión permanente**: *Releases* → *Draft a new release* → crear un tag (por ejemplo `v1.0`) → *Publish*. A los ~2 minutos la versión tiene adjuntos `ServidorRemoto.exe` y `ClienteRemoto.exe`.
 
-Windows Defender o SmartScreen pueden avisar al abrirlos porque no están firmados. Elegí *Más información → Ejecutar de todas formas*.
+## Firma con certificado propio
+
+Los `.exe` se firman automáticamente si el repositorio tiene los secretos `FIRMA_PFX_BASE64` y `FIRMA_PFX_PASSWORD`. Si no están, se compilan sin firmar y el workflow muestra un aviso.
+
+**Configuración (una sola vez, en tu PC con Windows):**
+
+1. Descargá la carpeta `firma` (o el repositorio entero) y ejecutá `firma\crear_certificado.bat`.
+   Para que figure otro nombre como titular: `crear_certificado.bat -Nombre "Mi Empresa"`.
+2. Si tenés [GitHub CLI](https://cli.github.com) con la sesión iniciada, los secretos se cargan solos. Si no, se abren la página de secretos del repositorio y un Bloc de notas con los dos valores para copiar y pegar.
+3. Guardá `firma_privada.pfx` y su contraseña en un lugar seguro, fuera del repositorio. Si los perdés, hay que crear otro certificado y volver a instalarlo en todas las PCs.
+
+**En cada PC donde se usen los programas:**
+
+Poné `ServidorRemoto.exe` / `ClienteRemoto.exe`, `AccesoRemoto-Firma.cer` e `instalar_certificado.bat` en la misma carpeta y ejecutá el `.bat` (pide permisos de administrador). Este script:
+
+- instala el certificado como raíz y editor de confianza, así que la firma figura como válida y aparece tu nombre como editor;
+- desbloquea los `.exe` de esa carpeta (les quita la marca de "descargado de Internet"), que es lo que hace saltar SmartScreen.
+
+En la empresa se puede distribuir el `.cer` por GPO: *Configuración del equipo → Directivas → Configuración de Windows → Configuración de seguridad → Directivas de clave pública*, en los almacenes *Entidades de certificación raíz de confianza* y *Editores de confianza*.
+
+Para quitarlo de una PC: `powershell -ExecutionPolicy Bypass -File instalar_certificado.ps1 -Desinstalar` (como administrador).
+
+**Límites:** un certificado propio solo genera confianza en las PCs donde lo instalás. Para SmartScreen, en cualquier otra PC cuenta igual que no tener firma, así que ahí vas a seguir viendo *Más información → Ejecutar de todas formas*. Para distribuir los programas al público hace falta un certificado comercial.
 
 ## Compilar a mano (opcional)
 
