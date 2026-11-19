@@ -54,7 +54,8 @@ jobs:
           $bc = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 "dist\AccesoRemoto-Firma.cer").Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.19" }
           Write-Host "Restricciones básicas: CA=$($bc.CertificateAuthority)"
           if ($bc.CertificateAuthority) { throw "El certificado no debería poder actuar como CA" }
-          & .\dist\ServidorRemoto.exe --help | Select-Object -First 1
+          & .\dist\ServidorRemoto.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "El exe firmado no arranca" }
 
       - name: 6) Desinstalar
         shell: powershell
