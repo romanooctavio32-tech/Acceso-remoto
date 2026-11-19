@@ -1,0 +1,65 @@
+name: Prueba firma
+on:
+  push:
+    branches: [prueba-firma]
+jobs:
+  prueba:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --name ServidorRemoto --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 servidor.py
+      - run: pyinstaller --onefile --windowed --name ClienteRemoto cliente.py
+
+      - name: 1) Crear certificado (Windows PowerShell 5.1, como en la PC del usuario)
+        shell: powershell
+        run: .\firma\crear_certificado.ps1 -Nombre "Prueba CI" -SinSubir
+
+      - name: 2) Leer los secretos generados
+        shell: pwsh
+        run: |
+          foreach ($l in Get-Content firma\secretos_github.txt) {
+            if ($l -match '^(FIRMA_PFX_BASE64|FIRMA_PFX_PASSWORD)=(.+)$') {
+              Write-Host "::add-mask::$($Matches[2])"
+              "$($Matches[1])=$($Matches[2])" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+      - name: 3) Firmar (igual que el workflow principal)
+        shell: pwsh
+        run: |
+          .\firma\firmar.ps1 -Archivos dist\ServidorRemoto.exe, dist\ClienteRemoto.exe
+          Copy-Item firma\instalar_certificado.ps1, firma\instalar_certificado.bat dist\
+
+      - name: 4) Antes de instalar, la firma NO debe ser de confianza
+        shell: pwsh
+        run: |
+          $s = Get-AuthenticodeSignature dist\ServidorRemoto.exe
+          Write-Host "Estado: $($s.Status) / $($s.SignerCertificate.Subject)"
+          if ($s.Status -eq "Valid") { throw "No debería ser válida todavía" }
+          if (-not $s.SignerCertificate) { throw "El exe no quedó firmado" }
+          if (-not $s.TimeStamperCertificate) { throw "Falta el sello de tiempo" }
+
+      - name: 5) Instalar certificado (Windows PowerShell 5.1) y comprobar
+        shell: powershell
+        run: |
+          Set-Content dist\ServidorRemoto.exe -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          .\dist\instalar_certificado.ps1
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) { throw "instalar_certificado falló" }
+          if (Get-Item dist\ServidorRemoto.exe -Stream Zone.Identifier -ErrorAction SilentlyContinue) { throw "No se quitó la marca de Internet" }
+          $s = Get-AuthenticodeSignature dist\ClienteRemoto.exe
+          if ($s.Status -ne "Valid") { throw "Tras instalar la firma no es válida: $($s.Status)" }
+          $bc = (New-Object Security.Cryptography.X509Certificates.X509Certificate2 "dist\AccesoRemoto-Firma.cer").Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.19" }
+          Write-Host "Restricciones básicas: CA=$($bc.CertificateAuthority)"
+          if ($bc.CertificateAuthority) { throw "El certificado no debería poder actuar como CA" }
+          & .\dist\ServidorRemoto.exe --help | Select-Object -First 1
+
+      - name: 6) Desinstalar
+        shell: powershell
+        run: |
+          .\dist\instalar_certificado.ps1 -Desinstalar
+          $s = Get-AuthenticodeSignature dist\ClienteRemoto.exe
+          Write-Host "Tras desinstalar: $($s.Status)"
+          if ($s.Status -eq "Valid") { throw "Debería dejar de ser válida" }
